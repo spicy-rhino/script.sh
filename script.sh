@@ -122,11 +122,27 @@ echo "[+] OwnCloud deployed. Access it at http://<OrangePi-IP>"
 # === 11. MediaMTX Setup and Systemd Service ===
 echo "[+] Downloading and installing MediaMTX (stable ARM64)..."
 cd "$USER_HOME"
+wget https://filesamples.com/samples/video/mp4/sample_640x360.mp4 -O sample.mp4
 curl -Lo mediamtx.tar.gz https://github.com/bluenviron/mediamtx/releases/download/v1.12.3/mediamtx_v1.12.3_linux_arm64.tar.gz | tee "$LOG_DIR/mediamtx_download.log"
 tar -xzf mediamtx.tar.gz | tee "$LOG_DIR/mediamtx_extract.log"
 rm -f mediamtx.tar.gz
 chmod +x "$USER_HOME/mediamtx"
 sudo chown "$ACTUAL_USER":"$ACTUAL_USER" "$USER_HOME/mediamtx"
+
+# Ensure mediamtx.yml allows all publishers by default
+if [ -f "$USER_HOME/mediamtx.yml" ]; then
+  # If an 'all_others:' path exists, convert it to 'all:' and set source to publisher
+  sudo sed -i 's/^  all_others:.*/  all:\n    source: publisher/' "$USER_HOME/mediamtx.yml"
+else
+  # Create a minimal config that allows all publishers
+  cat <<'EOF' | sudo tee "$USER_HOME/mediamtx.yml" >/dev/null
+paths:
+  all:
+    source: publisher
+EOF
+  sudo chown "$ACTUAL_USER":"$ACTUAL_USER" "$USER_HOME/mediamtx.yml"
+  sudo chmod 644 "$USER_HOME/mediamtx.yml"
+fi
 
 # --- Create a systemd service for MediaMTX ---
 sudo tee /etc/systemd/system/mediamtx.service > /dev/null <<EOF
