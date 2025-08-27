@@ -1,0 +1,22 @@
+network:
+  version: 2
+  ethernets:
+    tw-usb:
+      match:
+        macaddress: YOUR-TW-USB-ADAPTER'S-LINK/ETHER-ADDRESS-HERE
+      set-name: tw-usb
+      dhcp4: false
+      addresses:
+        - 10.100.100.100/8
+      optional: true
+
+    silvus-usb:
+      match:
+        macaddress: YOUR-SILVUS-USB-ADAPTER'S-LINK/ETHER-ADDRESS-HERE
+      set-name: silvus-usb
+      dhcp4: false
+      addresses:
+        - 172.20.100.100/12
+      optional: true
+
+#find the link/ether address by running "ip link show" before and after plugging in the adapters. Label the physical adapters so they don't get swapped.
