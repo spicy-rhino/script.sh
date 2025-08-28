@@ -1,6 +1,6 @@
-#network:
-  #version: 2
-  #ethernets:
+network:
+  version: 2
+  ethernets:
     #tw-usb:
       #match:
         #macaddress: YOUR-TW-USB-ADAPTER'S-LINK/ETHER-ADDRESS-HERE
