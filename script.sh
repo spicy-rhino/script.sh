@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Baseline v5 - Full Stack Setup Script for Orange Pi 5+ / RPi5 (Ubuntu 24.04.x LTS)
-# Services: TAK Server, OwnCloud (Docker), MediaMTX, Mumble Server
+# Services: TAK Server, OwnCloud (Docker), MediaMTX, Mumble Server, Radio USB Netplan
 
 wget https://filesamples.com/samples/video/mp4/sample_640x360.mp4 -O sample.mp4
 
@@ -263,6 +263,9 @@ sudo systemctl restart mumble-server | tee "$LOG_DIR/mumble_restart.log"
 CONFIG="/home/${SUDO_USER:-$USER}/mediamtx.yml"
 sudo sed -i 's/^  all_others:.*/  all_others:\n    source: publisher/' "$CONFIG"
 sudo systemctl restart "mediamtx@${SUDO_USER:-$USER}"
+
+# === 14. Radio USB Netplan Download ===
+sudo curl -fsSL https://raw.githubusercontent.com/spicy-rhino/script.sh/main/99-radio-usb-static.yaml -o /etc/netplan/99-radio-usb-static.yaml
 
 # === Completion ===
 echo "[✓] Full compute stack deployed on Orange Pi 5 Plus:"
