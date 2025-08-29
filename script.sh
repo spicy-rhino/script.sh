@@ -3,7 +3,7 @@
 # Baseline v5 - Full Stack Setup Script for Orange Pi 5+ / RPi5 (Ubuntu 24.04.x LTS)
 # Services: TAK Server, OwnCloud (Docker), MediaMTX, Mumble Server, Radio USB Netplan
 
-wget https://filesamples.com/samples/video/mp4/sample_640x360.mp4 -O sample.mp4
+wget http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4 -O sample.mp4
 
 set -euo pipefail
 trap 'echo "[!] ERROR on line $LINENO: Command \"$BASH_COMMAND\" failed" >&2' ERR
