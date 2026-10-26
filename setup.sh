@@ -9,10 +9,14 @@
 #   (optional) 99-radio-usb-static.yaml - your filled-in version; otherwise a blank template is installed
 #
 # Usage:
-#   sudo bash setup.sh               Normal install. TAK menus are answered automatically
-#                                    with the answers under "TAK setup answers" below.
-#   sudo bash setup.sh --manual-tak  Show the TAK menus and answer them yourself.
+#   sudo bash setup.sh               Normal install. Shows the TAK setup answers below and asks
+#                                    "Enter to use these, or c to change them" before starting.
+#   sudo bash setup.sh --defaults    Use the answers without asking (hands-off / scripted installs).
+#   sudo bash setup.sh --manual-tak  Show installTAK's own menus and answer them yourself.
 #   sudo bash setup.sh --clean       Wipes TAK/Mumble/ownCloud/MediaMTX first (asks you to type WIPE).
+#
+# Any TAK answer can also be set on the command line, e.g.:
+#   sudo TAK_STATE=Virginia TAK_DESCRIPTION="Alpha TAK" bash setup.sh --defaults
 # =============================================================================
 
 # ---- Settings ---------------------------------------------------------------
@@ -23,20 +27,20 @@ MTX_VERSION="v1.12.3"
 OWNCLOUD_IMAGE="owncloud:latest"
 NETPLAN_FILE="99-radio-usb-static.yaml"
 
-# ---- TAK setup answers (used unless you run with --manual-tak) --------------
-TAK_COUNTRY="US"                      # 2-letter country code
-TAK_STATE="Kansas"
-TAK_CITY="Lebanon"                    # geographic center of the lower 48 - a neutral default
-TAK_ORG="TAK"
-TAK_ORG_UNIT="TAK"
-TAK_CERT_PASSWORD=""                  # blank = TAK default (atakatak). Letters/numbers only if you set one.
-TAK_ROOT_CA="TAK Server Root CA"      # installTAK turns this into TAK-SERVER-ROOT-CA
-TAK_INT_CA="TAK Server CA"            # installTAK turns this into TAK-SERVER-CA
-TAK_AUTO_ENROLL="yes"
-TAK_FEDERATION="yes"
-TAK_WEB_OPTIONS="enableAdminUI enableWebtak"   # WebAdmin UI + WebTAK; NonAdminUI off
-TAK_CONNECTIONS="SSL QUIC"            # only asked on older TAK versions; 5.4 does both
-TAK_DESCRIPTION="TAK Server"          # name clients see for this server
+# ---- TAK setup answers (defaults; change here, at the prompt, or on the command line)
+TAK_COUNTRY="${TAK_COUNTRY:-XX}"                      # 2-letter code; XX = not specified
+TAK_STATE="${TAK_STATE:-None}"                      # never blank (installTAK geolocates) and no "/" - use None
+TAK_CITY="${TAK_CITY:-None}"                          # never blank and no "/" - use None
+TAK_ORG="${TAK_ORG:-TAK}"
+TAK_ORG_UNIT="${TAK_ORG_UNIT:-TAK}"
+TAK_CERT_PASSWORD="${TAK_CERT_PASSWORD:-}"            # blank = TAK default (atakatak). Letters/numbers only.
+TAK_ROOT_CA="${TAK_ROOT_CA:-TAK Server Root CA}"      # installTAK turns this into TAK-SERVER-ROOT-CA
+TAK_INT_CA="${TAK_INT_CA:-TAK Server CA}"             # installTAK turns this into TAK-SERVER-CA
+TAK_AUTO_ENROLL="${TAK_AUTO_ENROLL:-yes}"
+TAK_FEDERATION="${TAK_FEDERATION:-yes}"
+TAK_WEB_OPTIONS="${TAK_WEB_OPTIONS-enableAdminUI enableWebtak}"  # WebAdmin UI + WebTAK; NonAdminUI off
+TAK_CONNECTIONS="${TAK_CONNECTIONS:-SSL QUIC}"        # only asked on older TAK versions; 5.4 does both
+TAK_DESCRIPTION="${TAK_DESCRIPTION:-TAK Server}"      # name clients see for this server
 # FQDN connections: always No (clients connect by IP)
 # -----------------------------------------------------------------------------
 
@@ -57,11 +61,13 @@ CERT_OUT="$USER_HOME/tak-certs"
 WORK_DIR="$USER_HOME/installTAK-run"
 CLEAN=no
 MANUAL_TAK=no
+USE_DEFAULTS=no
 for arg in "$@"; do
   case "$arg" in
     --clean) CLEAN=yes ;;
     --manual-tak) MANUAL_TAK=yes ;;
-    *) echo "[!] Unknown option: $arg  (use --clean and/or --manual-tak)"; exit 1 ;;
+    --defaults) USE_DEFAULTS=yes ;;
+    *) echo "[!] Unknown option: $arg  (use --clean, --defaults and/or --manual-tak)"; exit 1 ;;
   esac
 done
 
@@ -127,6 +133,105 @@ if ! tak_installed || [ "$CLEAN" = yes ]; then
   fi
 fi
 log "Preflight OK (${FREE_GB}GB free)"
+
+# ---- TAK setup answers: confirm or change them now, before the long install ----
+show_tak_answers() {
+  echo
+  echo "  TAK Server setup answers:"
+  echo "    Location:          $TAK_COUNTRY / $TAK_STATE / $TAK_CITY"
+  echo "    Organization:      $TAK_ORG / $TAK_ORG_UNIT"
+  echo "    Cert password:     $([ -n "$TAK_CERT_PASSWORD" ] && echo 'custom (hidden)' || echo 'default (atakatak)')"
+  echo "    Root CA:           $TAK_ROOT_CA"
+  echo "    Intermediate CA:   $TAK_INT_CA"
+  echo "    Auto-enrollment:   $TAK_AUTO_ENROLL"
+  echo "    Federation v2:     $TAK_FEDERATION"
+  echo "    Web options:       ${TAK_WEB_OPTIONS:-none}"
+  echo "    Server name:       $TAK_DESCRIPTION"
+  echo "    FQDN:              no"
+}
+ask() {  # variable prompt
+  local cur="${!1}" v
+  read -r -p "  $2 [$cur]: " v || true
+  if [ -n "$v" ]; then printf -v "$1" '%s' "$v"; fi
+  return 0
+}
+ask_word() {  # variable prompt - no blanks (installTAK would geolocate) and no / & " ' (break installTAK)
+  while true; do
+    ask "$1" "$2"
+    local v="${!1}"
+    if [ -z "$v" ]; then echo "  Can't be blank (installTAK would fill in the Pi's real location). Try None."; printf -v "$1" '%s' "None"; continue; fi
+    if [[ "$v" == *[/\&\"\']* ]]; then echo "  Avoid / & and quotes - they break installTAK. Try None instead of N/A."; continue; fi
+    return 0
+  done
+}
+ask_yn() {  # variable prompt
+  local cur="${!1}" v
+  while true; do
+    read -r -p "  $2 (yes/no) [$cur]: " v || true
+    v="$(echo "${v:-$cur}" | tr 'A-Z' 'a-z')"
+    case "$v" in y|yes) printf -v "$1" yes; return ;; n|no) printf -v "$1" no; return ;; esac
+    echo "  Please answer yes or no."
+  done
+}
+change_tak_answers() {
+  echo
+  echo "  Press Enter to keep the value in [brackets]."
+  while true; do
+    ask TAK_COUNTRY "Country (2 letters; XX = not specified)"
+    TAK_COUNTRY="$(echo "$TAK_COUNTRY" | tr 'a-z' 'A-Z')"
+    if [[ "$TAK_COUNTRY" =~ ^[A-Z]{2}$ ]]; then break; fi
+    echo "  Use a 2-letter code like US."
+  done
+  ask_word TAK_STATE "State (or None)"
+  ask_word TAK_CITY "City (or None)"
+  ask_word TAK_ORG "Organization"
+  ask_word TAK_ORG_UNIT "Organizational unit"
+  while true; do
+    local p1 p2
+    read -r -s -p "  Cert password (letters/numbers; Enter = keep $([ -n "$TAK_CERT_PASSWORD" ] && echo 'current' || echo 'atakatak')): " p1 || true; echo
+    if [ -z "$p1" ]; then break; fi
+    if ! [[ "$p1" =~ ^[A-Za-z0-9]{6,}$ ]]; then echo "  Use at least 6 letters/numbers, no symbols."; continue; fi
+    read -r -s -p "  Type it again: " p2 || true; echo
+    if [ "$p1" = "$p2" ]; then TAK_CERT_PASSWORD="$p1"; break; fi
+    echo "  They didn't match - try again."
+  done
+  while true; do
+    ask TAK_ROOT_CA "Root CA name"
+    ask TAK_INT_CA "Intermediate CA name"
+    a="$(echo "${TAK_ROOT_CA// /-}" | tr 'a-z' 'A-Z')"; b="$(echo "${TAK_INT_CA// /-}" | tr 'a-z' 'A-Z')"
+    if [ "$a" != "$b" ]; then break; fi
+    echo "  The two CA names must be different."
+  done
+  ask_yn TAK_AUTO_ENROLL "Certificate auto-enrollment"
+  ask_yn TAK_FEDERATION "Federation v2"
+  local wa=no ww=no wn=no opts=""
+  if [[ " $TAK_WEB_OPTIONS " == *" enableAdminUI "* ]]; then wa=yes; fi
+  if [[ " $TAK_WEB_OPTIONS " == *" enableWebtak "* ]]; then ww=yes; fi
+  if [[ " $TAK_WEB_OPTIONS " == *" enableNonAdminUI "* ]]; then wn=yes; fi
+  ask_yn wa "Web: WebAdmin UI"
+  ask_yn ww "Web: WebTAK"
+  ask_yn wn "Web: NonAdmin UI"
+  if [ "$wa" = yes ]; then opts="enableAdminUI"; fi
+  if [ "$ww" = yes ]; then opts="${opts:+$opts }enableWebtak"; fi
+  if [ "$wn" = yes ]; then opts="${opts:+$opts }enableNonAdminUI"; fi
+  TAK_WEB_OPTIONS="$opts"
+  ask TAK_DESCRIPTION "Server name clients see"
+}
+if [ "$MANUAL_TAK" = no ] && { ! tak_installed || [ "$CLEAN" = yes ]; }; then
+  if [ "$USE_DEFAULTS" = no ] && [ -t 0 ]; then
+    while true; do
+      show_tak_answers
+      echo
+      read -r -p "  Press Enter to use these, or type c to change them: " c || true
+      case "$c" in
+        c|C) change_tak_answers ;;
+        *) break ;;
+      esac
+    done
+  else
+    show_tak_answers
+  fi
+fi
 
 # ---- 1. Optional wipe (only with --clean) -----------------------------------
 if [ "$CLEAN" = yes ]; then
